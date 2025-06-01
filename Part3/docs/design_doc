@@ -1,0 +1,125 @@
+This design document provides an overview of the client-server system, including its architecture, flow, components, and responsibilities for both the Redis Client and the Redis Server. It also includes interaction details between the client and the server, as well as key design decisions.
+1. Overview
+
+The system consists of two main components:
+
+    Client: A program that interacts with the server using the RESP (REdis Serialization Protocol) format to send commands like SET and GET and to receive the corresponding responses.
+    Server: A Redis-like server that processes the received commands, manages data storage (key-value pairs), and sends the appropriate response back to the client.
+
+The client sends serialized commands in RESP format, while the server parses and executes them, managing the key-value store and handling any errors or invalid commands.
+2. Functional Requirements
+
+    Client:
+        The client can send commands in the RESP format to the server.
+        It supports two basic Redis commands: SET (for adding/updating key-value pairs) and GET (for retrieving the value of a key).
+        The client must parse server responses and handle errors, ensuring proper error messages are displayed when commands are incorrect or unsupported.
+        The client operates in a loop, allowing the user to input commands interactively, send them to the server, and receive responses.
+    Server:
+        The server listens for incoming client connections and can handle multiple clients concurrently.
+        The server manages a key-value store where SET commands add or update keys, and GET commands retrieve values.
+        It must be able to parse RESP commands, handle them, and return valid RESP responses.
+        The server responds with error messages for invalid commands or if the data is unavailable (e.g., when trying to GET a non-existing key).
+
+3. System Architecture
+
+The system follows a client-server architecture where:
+
+    The Client sends commands (in RESP format) to the Server.
+    The Server processes the command, modifies its internal data store (a simple key-value store), and sends a response back to the client.
+
+The server can handle multiple connections using basic socket programming and multi-threading or asynchronous I/O techniques.
+Key Components:
+
+    Client:
+        RESP Serialization: The client constructs Redis commands (e.g., SET key value) and serializes them into RESP format to send over a socket.
+        Command Parsing: The client can split input into parts (e.g., SET, key, value) and serialize it.
+        Response Parsing: The client receives the server's response, identifies the type of response (simple string, bulk string, error), and displays it to the user.
+    Server:
+        Socket Communication: The server listens for incoming connections, accepts client connections, and processes requests.
+        Command Handling: The server processes commands based on the RESP format, manages the key-value store, and returns appropriate responses (e.g., +OK, error messages, or data).
+        Key-Value Store: The server uses an unordered map or hash table for key-value storage.
+        Multi-threading/Concurrency: The server supports concurrent client connections using a thread pool or asynchronous I/O (e.g., epoll).
+        Error Handling: The server handles invalid or unsupported commands by responding with appropriate error messages in RESP format.
+
+4. Detailed Design
+4.1 Client Design
+
+The client consists of the following modules:
+
+    RESP Serialization:
+        The client converts user input into the RESP format. For example, for the command SET key value, it is serialized as:
+
+        *3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n
+
+        The number of arguments (in this case 3) is specified at the beginning (*3\r\n), followed by each argument prefixed with its length ($3\r\nSET\r\n).
+
+    Input Parsing:
+        The client reads user input line-by-line.
+        It splits the input string into command parts and serializes them into RESP format.
+
+    Sending Data:
+        The client connects to the server using a socket.
+        The serialized command is sent over the socket to the server.
+
+    Receiving and Parsing Response:
+        After sending a command, the client waits for the response.
+        The response is parsed based on the RESP protocol, which consists of different types like simple strings (+OK), bulk strings (e.g., the data for a GET command), and errors (e.g., -ERR).
+        The client then prints the response to the console.
+
+4.2 Server Design
+
+The server is responsible for accepting client connections, processing commands, and managing a simple key-value store.
+
+    Socket Setup:
+        The server creates a socket and listens for incoming connections on a specified port.
+        It uses epoll (or similar mechanisms) for managing multiple connections concurrently in a non-blocking manner.
+
+    Command Parsing:
+        The server receives commands in RESP format.
+        The command type is parsed first (e.g., SET or GET).
+        For SET commands, the server extracts the key and value from the input and stores them in the key-value store.
+        For GET commands, the server retrieves the value associated with the given key and sends it back in the appropriate RESP format.
+
+    Key-Value Store:
+        The server uses an unordered map (std::unordered_map) to store key-value pairs. For simplicity, this can be implemented as:
+
+        std::unordered_map<std::string, std::string> store;
+
+    Response Formatting:
+        The server formats the response in RESP format and sends it back to the client. If a key exists, the server sends the value in a bulk string format. For non-existing keys, it sends $-1\r\n.
+
+    Error Handling:
+        Invalid commands (e.g., unsupported commands or wrong number of arguments) are handled by sending a -ERR message.
+        The server also handles connection errors or unexpected socket issues.
+
+5. Data Flow
+
+    Client-Side Flow:
+        The client prompts the user to input a Redis command (e.g., SET, GET).
+        It parses the command into RESP format and sends it to the server via a TCP socket.
+        The client waits for the response from the server.
+        Upon receiving the response, the client parses it and displays it (e.g., success message, retrieved value, or error).
+
+    Server-Side Flow:
+        The server listens for incoming connections from clients.
+        When a connection is accepted, the server begins reading the data sent by the client.
+        The server parses the command, executes the requested operation (e.g., SET or GET), and formats the appropriate response in RESP format.
+        The server sends the response back to the client.
+
+6. Error Handling and Validation
+
+    Client-Side:
+        If the server sends an error (e.g., invalid command or protocol error), the client must handle and display the error message to the user.
+        The client ensures that it sends commands in the correct RESP format, including argument lengths and proper formatting.
+
+    Server-Side:
+        If the server encounters an unknown command, it responds with -ERR Unknown command.
+        If there are issues with parsing the RESP message (e.g., incomplete command), it responds with -ERR Protocol error.
+        The server must handle socket errors, such as disconnections or invalid inputs, gracefully.
+
+7. Multi-Threading and Concurrency
+
+The server can handle multiple clients concurrently by using threads or non-blocking I/O:
+
+    Thread Pool: A thread pool can be created to handle multiple requests simultaneously, with each request being processed by a separate worker thread.
+    Non-blocking I/O (epoll): An alternative is using epoll to handle multiple connections without blocking. This approach allows the server to handle a large number of connections more efficiently.

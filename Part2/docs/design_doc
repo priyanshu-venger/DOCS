@@ -1,0 +1,186 @@
+Design Document: Process Resource Monitoring System
+
+##Overview
+
+This document outlines the design for a process resource monitoring system implemented in C++. The system is intended to track and log the CPU usage and memory usage of a specified process at regular intervals (every minute). It retrieves this information from the /proc filesystem, which is available on Linux-based systems. The CPU usage is computed based on process time and total system time, while the memory usage is fetched directly from the process's status file.
+
+The resource usage data is logged into a CSV file for further analysis. This system is useful for monitoring the performance and resource consumption of processes over time.
+
+1. Requirements
+Functional Requirements
+
+    CPU Usage Calculation:
+        Retrieve CPU usage for a specific process based on the time spent in user, system, and child processes.
+        Calculate the percentage of CPU utilization by comparing the change in process CPU time and total system CPU time.
+
+    Memory Usage Calculation:
+        Retrieve memory usage (VmRSS) for a specific process from its /proc/<pid>/status file.
+
+    Resource Monitoring:
+        Periodically monitor the CPU and memory usage every minute.
+        Log the monitored data (timestamp, CPU usage, memory usage) into a CSV log file.
+
+    Log Data:
+        Log the CPU and memory usage data every minute.
+        The log file should contain a timestamp, CPU usage (in percentage), and memory usage (in kilobytes).
+
+    Error Handling:
+        Properly handle cases where files or resources are unavailable (e.g., process or log file).
+
+Non-Functional Requirements
+
+    Performance:
+        The program should run continuously in the background without significant performance degradation.
+    Scalability:
+        While designed for a single process, the architecture allows for scalability to handle multiple processes by running multiple instances of the monitoring function.
+    Extensibility:
+        The system can be extended to support additional resource metrics or monitoring intervals.
+    Robustness:
+        Handle edge cases like missing files, incorrect PIDs, or permissions errors gracefully.
+
+2. Architecture Overview
+
+The system is composed of three core functions:
+
+    get_cpu_usage(int pid) – This function calculates the CPU usage of a process.
+    get_memory_usage(int pid) – This function retrieves the memory usage of the process.
+    monitor_resource_usage(int pid) – This function orchestrates the resource monitoring process, logging data every minute.
+
+High-Level Flow:
+
+    Input:
+        A process ID (pid) is provided as input to the program. This ID corresponds to the process whose CPU and memory usage we want to monitor.
+
+    Data Collection:
+        CPU usage is retrieved from two files:
+            /proc/<pid>/stat — Contains per-process statistics such as CPU times.
+            /proc/stat — Contains system-wide CPU statistics.
+        Memory usage is retrieved from:
+            /proc/<pid>/status — Contains memory information, including VmRSS (resident set size).
+
+    Data Logging:
+        The CPU and memory usage data is logged in a CSV file along with a timestamp.
+
+    Repetition:
+        The system repeats the data collection process every 60 seconds (1 minute) and appends the data to the log file.
+
+3. Detailed Design
+Data Flow Diagram
+
+            +-------------------+              +-------------------+
+            |                   |              |                   |
+            |  get_cpu_usage()   +----> Get CPU +----> /proc/<pid>/stat|
+            |                   |              |                   |
+            +-------------------+              +-------------------+
+                     |
+                     v
+            +-------------------+              +-------------------+
+            |                   |              |                   |
+            | get_memory_usage() +----> Get Mem +----> /proc/<pid>/status|
+            |                   |              |                   |
+            +-------------------+              +-------------------+
+                     |
+                     v
+            +-------------------+              +-------------------+
+            |                   |              |                   |
+            |  monitor_resource +----> Log Data +----> log_file.csv   |
+            |    _usage()        |              |                   |
+            |                   |              +-------------------+
+            +-------------------+ 
+
+Data Structures
+
+    Process Information (CPU & Memory)
+
+        CPU Data:
+            User time (utime): Time spent in user mode.
+            System time (stime): Time spent in kernel mode.
+            Child user time (cutime): Time spent by child processes in user mode.
+            Child system time (cstime): Time spent by child processes in kernel mode.
+
+        Memory Data:
+            VmRSS: The portion of memory occupied by a process in RAM (resident set size).
+
+    Logging Structure:
+        Timestamp: The current time when the data is logged.
+        CPU Usage: Calculated percentage of CPU utilization.
+        Memory Usage: Memory usage in kilobytes (KB).
+
+4. Functions
+get_cpu_usage(int pid)
+
+    Purpose: Calculates the CPU usage for the process identified by pid.
+    Inputs:
+        pid (Process ID of the target process).
+    Outputs:
+        CPU usage in percentage as a floating-point value.
+
+Steps:
+
+    Read the process's CPU times (utime, stime, cutime, cstime) from /proc/<pid>/stat.
+    Calculate the total CPU time used by the process.
+    Read system-wide CPU statistics from /proc/stat.
+    Calculate the total system CPU time.
+    Calculate the change in process and system CPU times since the last call.
+    Return the CPU usage as a percentage.
+
+get_memory_usage(int pid)
+
+    Purpose: Retrieves the memory usage (VmRSS) of a process identified by pid.
+    Inputs:
+        pid (Process ID of the target process).
+    Outputs:
+        Memory usage in kilobytes (KB).
+
+Steps:
+
+    Open and read the /proc/<pid>/status file.
+    Extract the VmRSS value, which represents the memory usage of the process.
+    Return the memory usage in KB.
+
+monitor_resource_usage(int pid)
+
+    Purpose: Periodically monitors the CPU and memory usage of a process and logs the data.
+    Inputs:
+        pid (Process ID of the target process).
+    Outputs:
+        Logs data into a CSV file at regular intervals (every 1 minute).
+        Optionally outputs data to the console.
+
+Steps:
+
+    Open the log file in append mode (log_file.csv).
+    Write the header line if it's the first log entry.
+    In an infinite loop:
+        Call get_cpu_usage() to get the CPU usage.
+        Call get_memory_usage() to get the memory usage.
+        Get the current timestamp.
+        Write the timestamp, CPU usage, and memory usage to the log file.
+        Print the data to the console.
+    Sleep for 60 seconds before repeating the process.
+
+5. Error Handling
+
+    File Not Found:
+        If the /proc/<pid>/stat or /proc/<pid>/status files cannot be opened, the system will print an error message and return 0.0f (for CPU) or 0 (for memory).
+
+    Permission Issues:
+        The system assumes that the program has permission to access the /proc directory and the process’s data. If not, appropriate error messages will be displayed.
+
+    Log File Issues:
+        If the log file cannot be opened (e.g., due to permissions or invalid path), the program will print an error message and terminate gracefully.
+
+6. Performance Considerations
+
+    CPU Usage: The program reads process data and system statistics every minute, so the performance overhead is minimal. The reading and parsing of /proc files is relatively fast, but excessive use of this program on many processes can cause some impact on system I/O.
+    Memory Usage: The memory usage of the program itself is small, as it only stores CPU and memory usage statistics for a short time.
+
+7. Logging Format
+
+The system logs data in CSV format to the file defined by LOG_FILE:
+
+Timestamp,CPU_Usage(%),Memory_Usage(KB)
+2024-12-01 12:00:00,25.5,1024
+2024-12-01 12:01:00,27.8,1040
+
+Each line contains the timestamp of the log entry, the CPU usage in percentage, and the memory usage in kilobytes.

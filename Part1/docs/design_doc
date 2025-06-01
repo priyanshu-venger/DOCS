@@ -1,0 +1,20 @@
+The database has been designed for optimizing write heavy.
+
+For that, LSM tree has been used.
+
+In the LSM tree, the threshold size of memtable is set to 4*1e6, i.e. it gets flushed to a new sstable in disk when it reached this threshold.
+
+Maximum entry(key+value) size has been set to 4*1e6 as well so that any entry does not exceed the threshold size of memtable.
+
+Maximum size of flushed table can be in the range 4*1e6 to <8*1e6 because of above those decisions.
+For sstables, in each Tier there can be atmost three tables, if it reaches to 4 tables, then all of them instantly gets merged
+
+Design optimization: BloomFilter for each memtable and sstable has been implemented for optimization which is a probabilistic function which checks with false positive if a key is there in the table.
+
+If it says yes, then it is searched using binary search in the table, otherwise it skips.
+
+Deleted keys are marked with TOMBSTONE("\r\n") as Redis doesn't support "\r\n" as a query.
+
+Keys with TOMBSTONE as value are removed from the table obtained by merging the last Tier's tables as it can't be present in further levels.
+
+Threads have been used to take advantage of multiple cores. They'll automatically get allocated a core as per the need.
