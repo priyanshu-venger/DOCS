@@ -19,7 +19,7 @@ REPL.o: REPL.cpp REPL.h
 	$(CXX) $(CXXFLAGS) -c REPL.cpp
 # Clean up generated files
 clean:
-	rm -f $(OBJ) $(LIBRARY)
+	rm -f $(OBJ) $(LIBRARY) *.out
 
 # Phony targets
 .PHONY: clean

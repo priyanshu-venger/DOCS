@@ -55,6 +55,24 @@ void Database::read_lock(int i){
     if(rcount[i]==1) P(wsemids[i]);                 ///< If there is at least one reader, wait for writers to complete
     V(reader[i]);
 }
+void Database::read_lock1(){
+    P(rreader);
+    ++rreaders;
+    if(rreaders==1) P(rwriter);                 ///< If there is at least one reader, wait for writers to complete
+    V(rreader);
+}
+void Database::read_unlock1(){
+    P(rreader);   
+    --rreaders;
+    if(!rreaders) V(rwriter);                   ///< If there are no readers, signal to writers
+    V(rreader);
+}
+void Database::write_lock1(){
+    P(rwriter);
+}
+void Database::write_unlock1(){
+    V(rwriter);
+}
 
 /**
  * @brief Unlocks the i-th tier for reading.
@@ -140,15 +158,7 @@ void Database::get_folder(int i, path &Tier){
  * 
  * This function reloads the memtable from the WAL file during database initialization.
  */
-void Database::initialize_memtable(){
-    path database("./Database");
-    assert(exists(database));
-    path WAL(database/"WAL.bin");
-    if(!exists(WAL)){
-        wal = ofstream(WAL, ios::binary | ios::out);
-        assert(!wal.fail());
-        return;
-    }
+void Database::initializer_helper(){
     ifstream file;
     file.open(WAL, ios::binary | ios::in);
     assert(!file.fail());
@@ -163,7 +173,7 @@ void Database::initialize_memtable(){
         val.resize(length);
         file.read(&val[0], length);
         mem_size += length;
-        memtable[key] = val;
+        write_memtable[key] = val;
         filters[0][0].add(key);  // Add key to BloomFilter
     }
     file.close();
@@ -173,7 +183,37 @@ void Database::initialize_memtable(){
         flushrunning = 1;
         V(flushid);
         merge_unlock(0);
+        T(flushid);
     }
+}
+void Database::initialize_memtable(){
+    path database("./Database");
+    assert(exists(database));
+    WAL=path(database/"WAL_temp.bin");
+    path WAL1=path(database/"WAL.bin");
+    if(exists(WAL) && exists(WAL1)){
+        rename(WAL1,database/"WAL_temp1.bin");
+        WAL1=database/"WAL_temp1.bin";
+    }
+    else if(!exists(WAL1)) WAL1=database/"WAL_temp1.bin";
+    
+    if(exists(WAL)){
+        initializer_helper();
+        wal.close();
+        remove("./Database/WAL.bin");
+    }
+    WAL=path(database/"WAL.bin");
+    if(exists(WAL1)){
+        rename(WAL1,database/"WAL.bin");
+        initializer_helper();
+        return;
+    }
+    if(!exists(WAL)){
+        wal = ofstream(WAL, ios::binary | ios::out);
+        assert(!wal.fail());
+        return;
+    }
+    
 }
 
 /**
@@ -535,8 +575,9 @@ void Database::append_to_WAL(string &key, string &val) {
  * compactions.
  */
 Database::Database() {
-    filters.push_back(vector<BloomFilter>(1));
+    filters.push_back(vector<BloomFilter>(2));
     cout << "INITIALIZING DATABASE....\n";
+    ifread_memtable=0;
     
     path database("./Database");
     if (!exists(database)) {
@@ -569,6 +610,9 @@ Database::Database() {
     reader.push_back(semget(IPC_PRIVATE, 1, IPC_CREAT | 0777));
     writer.push_back(semget(IPC_PRIVATE, 1, IPC_CREAT | 0777));
     mtx.push_back(semget(IPC_PRIVATE, 1, IPC_CREAT | 0777));
+    rreader=semget(IPC_PRIVATE, 1, IPC_CREAT | 0777);
+    rwriter=semget(IPC_PRIVATE, 1, IPC_CREAT | 0777);
+    rreaders=0;
     wcount.push_back(0);
     rcount.push_back(0);
     flushrunning = 0;
@@ -585,7 +629,8 @@ Database::Database() {
     semctl(writer[0], 0, SETVAL, 1);
     semctl(reader[0], 0, SETVAL, 1);
     semctl(mtx[0], 0, SETVAL, 1);
-
+    semctl(rreader,0,SETVAL,1);
+    semctl(rwriter,0,SETVAL,1);
     // Start compaction and flushing threads
     compact_main_thread = thread([this]() { compact_main(); });
     flush_thread = thread([this]() { FLUSH(); });
@@ -640,6 +685,18 @@ void Database::FLUSH() {
         if (destroy) {
             return;
         }
+        write_lock(0);
+        swap(write_memtable,read_memtable);
+        mem_size=0;
+        swap(filters[0][0],filters[0][1]);
+        wal.close();
+        rename(WAL,"./Database/WAL_temp.bin");
+        wal.open("./Database/WAL.bin", ios::binary | ios::trunc);
+        assert(wal.fail() == 0);
+        ifread_memtable=true;
+        flushrunning=0;
+        write_unlock(0);
+        P(flushid);
 
         path folder;
         get_folder(1, folder);
@@ -652,7 +709,7 @@ void Database::FLUSH() {
         metadata.write(reinterpret_cast<char*>(&tot_size), sizeof(tot_size));
         
         // Write all entries from memtable to file and metadata
-        for (auto &[i, j] : memtable) {
+        for (auto &[i, j] : read_memtable) {
             file.write(&i[0], i.length());
             file.write(&j[0], j.length());
 
@@ -665,17 +722,18 @@ void Database::FLUSH() {
             temp.add(i);
         }
 
-        nentries = memtable.size();
+        nentries = read_memtable.size();
         metadata.write(reinterpret_cast<char*>(&nentries), sizeof(nentries));
 
         file.close();
         metadata.close();
 
-        write_lock(0);
-        memtable.clear();
-        filters[0][0].clear();
-        mem_size = 0;
-
+        write_lock1();
+        read_memtable.clear();
+        filters[0][1].clear();
+        remove("./Database/WAL_temp.bin");
+        ifread_memtable=0;
+        write_unlock1();
         merge_lock(1);
         write_lock(1);
 
@@ -689,17 +747,6 @@ void Database::FLUSH() {
         else {
             merge_unlock(1);
         }
-
-        wal.close();
-
-        // Reopen WAL in truncate mode
-        wal.open("./Database/WAL.bin", ios::binary | ios::trunc);
-        assert(wal.fail() == 0);
-
-        flushrunning = 0;
-        P(flushid);
-
-        write_unlock(0);
         write_unlock(1);
     }
 }

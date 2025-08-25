@@ -293,7 +293,7 @@ int main() {
 
     std::unordered_map<int, ClientContext> clients;
 
-    ThreadPool thread_pool(4);  // 4 threads in the pool
+    ThreadPool thread_pool(8);  // 4 threads in the pool
 
     struct epoll_event events[MAX_EVENTS];
     while (true) {

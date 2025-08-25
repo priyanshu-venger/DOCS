@@ -17,9 +17,26 @@ bool REPL::GET(string &key, string &value) {
 
     // Check if the key is in the Bloom filter for the memtable.
     if (filters[0][0].contains(key)) {
-        auto pointer = memtable.find(key);  // Find the key in the memtable.
+        auto pointer = write_memtable.find(key);  // Find the key in the memtable.
         
-        if (pointer != memtable.end()) {
+        if (pointer != write_memtable.end()) {
+            if (pointer->second != TOMBSTONE) {  // If the value is not a TOMBSTONE.
+                read_unlock(0);
+                value = pointer->second;
+                return true;
+            } 
+            else{
+                read_unlock(0);
+                return false;
+            }
+        }
+    }
+    read_unlock(0);
+    read_lock1();
+    if (ifread_memtable && filters[0][1].contains(key)) {
+        auto pointer = read_memtable.find(key);  // Find the key in the memtable.
+        
+        if (pointer != read_memtable.end()) {
             if (pointer->second != TOMBSTONE) {  // If the value is not a TOMBSTONE.
                 read_unlock(0);
                 value = pointer->second;
@@ -32,7 +49,7 @@ bool REPL::GET(string &key, string &value) {
         }
     }
 
-    read_unlock(0);
+    read_unlock1();
 
     // Check all levels of the database if the key is not in the memtable.
     for (int i = 1; i < levels_main.size(); ++i) {
@@ -89,7 +106,7 @@ bool REPL::SET(string &key, string &value) {
     }
 
     append_to_WAL(key, value);  // Append the key-value pair to the WAL.
-    memtable[key] = value;      // Insert the key-value pair into the memtable.
+    write_memtable[key] = value;      // Insert the key-value pair into the memtable.
     mem_size += key.length() + value.length();  // Update the memtable size.
 
     filters[0][0].add(key);  // Add the key to the Bloom filter.
@@ -98,10 +115,12 @@ bool REPL::SET(string &key, string &value) {
     if (mem_size >= MAX) {
         flushrunning = 1;
         V(flushid);
-        merge_unlock(0);
     }
 
     write_unlock(0);  // Unlocks the write lock.
+    if (mem_size >= MAX) {
+        merge_unlock(0);
+    }
     return true;
 }
 

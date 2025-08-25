@@ -57,11 +57,12 @@ public:
  */
 class Database {
 protected:
-    int flushid, compactid;                ///< IDs for flush and compaction semaphores.
+    int flushid, compactid,rwriter,rreader,rreaders;                ///< IDs for flush and compaction semaphores.
     bool destroy;                          ///< Indicates whether the database is being destroyed.
     vector<vector<BloomFilter>> filters;   ///< Bloom filters for different tiers.
     ofstream wal;                          ///< Write-ahead log (WAL) file stream.
-    map<string, string> memtable;          ///< In-memory key-value storage.
+    map<string, string> read_memtable,write_memtable;          ///< In-memory key-value storage.
+    bool ifread_memtable;
     vector<int> levels_main;               ///< Stores the number of data files in Tier_i.
     size_t mem_size;                       ///< Size of the in-memory table.
     vector<int> semids, wsemids, wcount, rcount, reader, writer, mtx; ///< Semaphore and thread control variables.
@@ -127,8 +128,14 @@ protected:
     void write_unlock(int tier);
     void read_lock(int tier);
     void read_unlock(int tier);
+    void read_lock1();
+    void read_unlock1();
+    void write_lock1();
+    void write_unlock1();
     void merge_lock(int tier);
     void merge_unlock(int tier);
+    void initializer_helper();
+    path WAL;
 
     /**
      * @brief Retrieves the path to a specific tier directory. Creates it if it doesn't exist.

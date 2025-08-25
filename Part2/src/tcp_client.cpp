@@ -17,7 +17,7 @@
 #include <sys/socket.h>
 #include <chrono>
 
-#define SERVER_IP "10.0.0.3"  ///< IP address of the server
+#define SERVER_IP "127.0.0.1"  ///< IP address of the server
 #define PORT 12345 ///< Port number for the connection
 #define BUFFER_SIZE 2048 ///< Size of the buffer used for communication
 int NUM_PACKETS=1;  

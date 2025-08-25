@@ -32,7 +32,7 @@ ip netns exec NS2 ip link set lo up
 ip netns exec NS3 ip link set lo up
 
 # Set up interfaces and IP addresses in NS1
-ip netns exec NS1 ip addr add 10.0.0.1/24 dev veth0
+ip netns exec NS1 ip addr add 127.0.0.1:12346/24 dev veth0
 ip netns exec NS1 ip link set dev veth0 up
 
 # Set up interfaces in NS2 and create the bridge
@@ -52,7 +52,7 @@ ip netns exec NS2 brctl addif br0 veth2
 ip netns exec NS2 ip link set dev br0 up
 
 # Set up interfaces and IP addresses in NS3
-ip netns exec NS3 ip addr add 10.0.0.3/24 dev veth3
+ip netns exec NS3 ip addr add 127.0.0.1:12345/24 dev veth3
 ip netns exec NS3 ip link set dev veth3 up
 
 # Introduce delay and packet loss on veth3 in NS3
