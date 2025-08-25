@@ -50,7 +50,7 @@ Follow the following steps to test the implementation:
 	
 Part 3: DOCS DB - The Complete Database
 
-This part integrates the storage engine (Part A) with the chosen network stack (Part B).
+This part integrates Part A with Part B.
 
 	Navigate to the directory:
 	cd Part3
