@@ -23,6 +23,7 @@ Part A: Key-Value Storage Engines
 This part implements the database as a static library.
 
 Run the following commands to test the implementation:
+
 	Navigate to the directory:
 	cd Part1
 	Build the library:
@@ -36,12 +37,13 @@ Part B: Network Exploration
 
 This part explores and benchmarks TCP networking.
 Follow the following steps to test the implementation:
+
 	Navigate to the directory:
 	cd Part2
 	Create and configure network namespaces:
 	(Note: This requires sudo privileges.)
 	sudo ./script.sh
-
+ 
 	Run server and client:
 	g++ -o server server.cpp
 	./server
