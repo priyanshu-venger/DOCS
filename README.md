@@ -20,47 +20,55 @@ Setup and Execution Instructions
 
 Part A: Key-Value Storage Engines
 
-This part implements the core storage engine as a static library and provides a simple REPL for interaction.
+This part implements the database as a static library.
 
-cd Part1
-make
-g++ -o main.cpp -L. -ldatabase
-./main
+Run the following commands to test the implementation:
+	Navigate to the directory:
+	cd Part1
+	Build the library:
+	make
+	Run:
+	g++ -o main.cpp -L. -ldatabase
+	./main
 You'll get an interactive interface for testing.
 
 Part B: Network Exploration
 
 This part explores and benchmarks TCP networking.
-cd Part2
-Create and configure network namespaces:
-(Note: This requires sudo privileges.)
-sudo ./script.sh
+Follow the following steps to test the implementation:
+	Navigate to the directory:
+	cd Part2
+	Create and configure network namespaces:
+	(Note: This requires sudo privileges.)
+	sudo ./script.sh
 
-Then run server and client
-
+	Run server and client:
+	g++ -o server server.cpp
+	./server
+	g++ -o client.cpp
+	./client
+	
 Part 3: DOCS DB - The Complete Database
 
 This part integrates the storage engine (Part A) with the chosen network stack (Part B).
 
-    Navigate to the directory:
-    Bash
+	Navigate to the directory:
+	cd Part3
 
-cd Part3
+	Build the project:
+	make
 
-Build the project:
-make
+	Run the DOCS DB Server:
+	g++ -o server server.cpp -L. -ldatabase
+	./server
 
-Run the DOCS DB Server:
-g++ -o server server.cpp -L. -ldatabase
-./server
+	Run the client:
+	g++ client.cpp
+	./a.out
 
-Run the client:
-g++ client.cpp
-./a.out
-
-Otherwise if you want to test with redis benchmark, run:
-./benchmark.sh		#Uncomment what concurrency you want to run it for
-Results get stores in the benchmark folder
+	Otherwise if you want to test with redis benchmark, run:
+	./benchmark.sh		#Uncomment what concurrency you want to run it for
+	Results will get stored in the benchmark folder
 
 Design Documents
 Detailed design documents for Part A and Part C can be found in the docs/ subdirectory of each respective part. These documents outline key engineering decisions, data structures, concurrency models, and optimizations implemented.
