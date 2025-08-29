@@ -10,7 +10,7 @@
  * through a REPL (Read-Eval-Print Loop). The methods allow retrieving, setting, and deleting key-value pairs 
  * from the database.
  */
-class REPL : public Database {
+class REPL : private Database {
 public:
     /**
      * @brief Retrieves the value associated with a given key.
